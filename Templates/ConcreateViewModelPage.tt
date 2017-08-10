@@ -1,0 +1,74 @@
+﻿<#@ template debug="false" hostspecific="true" language="C#" #>
+<#@ assembly name="System.Core" #>
+<#@ assembly name="$(SolutionDir)$(AssemblyName)\bin\$(Platform)\$(Configuration)\$(AssemblyName).exe" #>
+<#@ assembly name="EnvDTE" #>  
+<#@ import namespace="EnvDTE" #>  
+<#@ import namespace="System.Linq" #>
+<#@ import namespace="System.Text" #>
+<#@ import namespace="System.Reflection" #>
+<#@ import namespace="System.Collections.Generic" #>
+<#@ import namespace="TeamServicesControlPanel.Universal" #>
+<#@ import namespace="System.IO" #>
+<#@ output extension=".cs" #>
+<#	
+	var viewModelsNamespace = "ViewModels"; // Namespace for view models. Relative to the project namespace.
+	var viewModelPropertyName = "VM"; // Name of the ViewModel property that will apear in the view class.
+	var projectNamespace = GetNamespace();
+	var views = Directory.GetFiles(Host.ResolvePath("..\\Views"))
+				.Select(f => Path.GetFileNameWithoutExtension(f))
+				.Where(f => !f.EndsWith(".xaml"))
+				.ToList();
+#>
+namespace <#=projectNamespace#>.Views
+{
+	<# foreach(var view in views)
+	{
+	#>
+		public partial class <#= view#> : System.ComponentModel.INotifyPropertyChanged
+		{
+			public <#= view#>()
+			{
+				InitializeComponent();
+				DataContextChanged += OnDataContextChanged;
+			}
+
+			public <#=viewModelsNamespace#>.<#= view#>ViewModel <#=viewModelPropertyName#>
+			{
+				get
+				{
+					return DataContext as <#=viewModelsNamespace#>.<#= view#>ViewModel;
+				}
+			}
+
+			private void OnDataContextChanged(Windows.UI.Xaml.FrameworkElement sender, Windows.UI.Xaml.DataContextChangedEventArgs args)
+			{
+				PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(<#=viewModelPropertyName#>)));
+			}
+
+			public event System.ComponentModel.PropertyChangedEventHandler PropertyChanged;
+		}
+
+	<#
+	}
+	#>
+}
+
+<#+
+private string GetNamespace()
+{
+	var serviceProvider = Host as IServiceProvider;
+	var dte = serviceProvider?.GetService(typeof(DTE)) as DTE;
+	var activeProjects = dte?.ActiveSolutionProjects as object[];
+
+	if(activeProjects == null || activeProjects.Length == 0)
+		return "";
+
+	var project = activeProjects[0] as Project;
+	var namespaceProperty = project?.Properties.Item("DefaultNamespace");
+
+	if(namespaceProperty == null)
+		return "";
+
+	return (string)namespaceProperty.Value;
+}
+#>
